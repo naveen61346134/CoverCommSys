@@ -14,7 +14,7 @@ sysLog = f"{cs[0]} {cs[2]} {cs[3]} {cs[4]} {cCount} {uname}".encode("UTF-8")
 shutdown = threading.Event()
 clientSoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 addr = input("Enter server ip: ")
-port = 8080
+port = int(input("Enter port: "))
 try:
     clientSoc.connect((addr, port))
     clientSoc.send(sysLog)
