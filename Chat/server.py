@@ -12,7 +12,7 @@ clientLock = threading.Lock()
 shutdownServer = threading.Event()
 logging.basicConfig(filename='server.log', level=logging.INFO)
 conf.get_default().log_event_callback = lambda log: logging.info(log)
-ngrok.set_auth_token("1zlZs5vxLkI9CnhpzzYLHzwhJvI_3wLyYH3QNqgg6Hiwrrk9V")
+ngrok.set_auth_token("YOUR-TOKEN")
 
 print("[*] Starting tcp server up....")
 hostIP = socket.gethostbyname(socket.gethostname())
