@@ -1,15 +1,19 @@
 import socket
 import logging
-import threading
+from random import shuffle
+from base64 import b64encode
+from threading import Thread, Lock, Event
 from pyngrok import ngrok, conf, exception
+from string import ascii_lowercase, ascii_uppercase, digits, punctuation
+
 
 clients = []
 clientSysData = open("clientSystem.log", "a")
-maxClients = 4
+maxClients = 2
 FORMAT = "UTF-8"
 RX_BUFFER = 1024
-clientLock = threading.Lock()
-shutdownServer = threading.Event()
+clientLock = Lock()
+shutdownServer = Event()
 logging.basicConfig(filename='server.log', level=logging.INFO)
 conf.get_default().log_event_callback = lambda log: logging.info(log)
 ngrok.set_auth_token("YOUR-TOKEN")
@@ -28,6 +32,36 @@ except OSError:
     exit(1)
 print(f"[+] Local Server up and running!")
 serverSoc.listen(maxClients)
+
+chars = list(ascii_lowercase + ascii_uppercase +
+             digits + punctuation + " " + "\n")
+keyChars = chars.copy()
+shuffle(keyChars)
+
+
+def sendKey(soc: socket.socket):
+    kstr = "".join(keyChars)
+    baseKey = b64encode(kstr.encode(FORMAT)).decode(FORMAT)
+    print("\t[=]SENDING KEY")
+    soc.send(baseKey.encode(FORMAT))
+    print("\t[=]Waiting for log")
+    info = soc.recv(RX_BUFFER).decode(FORMAT)
+    print(decryptMsg(keyChars, info))
+    return decryptMsg(keyChars, info)
+
+
+def encryptMsg(key: list, msg: str):
+    global chars
+    encList = [key[chars.index(char)] for char in msg]
+    encMsg = "".join(encList)
+    return encMsg
+
+
+def decryptMsg(key: list, msg: str):
+    global chars
+    decList = [chars[key.index(char)] for char in msg]
+    decMsg = "".join(decList)
+    return decMsg
 
 
 def createTunnel():
@@ -49,14 +83,22 @@ def broadcast(msg: str, user=None):
     with clientLock:
         for client in clients:
             if user != None:
-                client.send(f"[{user}]: {msg}".encode(FORMAT))
+                encMsg = encryptMsg(keyChars, f"[{user}]: {msg}")
+                client.send(encMsg.encode(FORMAT))
             else:
-                client.send(msg.encode(FORMAT))
+                client.send(encryptMsg(keyChars, msg).encode(FORMAT))
 
 
 def handleClient(cSoc: socket.socket, cIP):
-    clientData = cSoc.recv(RX_BUFFER).decode("UTF-8")
-    username = cSoc.recv(RX_BUFFER).decode(FORMAT)
+    cSoc.send("KEY".encode(FORMAT))
+    clientData = sendKey(cSoc)
+    print(f"[+] Send Encryption Key Size: {len(keyChars)}")
+    try:
+        username = decryptMsg(keyChars, cSoc.recv(RX_BUFFER).decode(FORMAT))
+    except ConnectionResetError:
+        print("[-] Client disconnected!\n")
+        clients.remove(cSoc)
+        cSoc.close()
     clientSysData.write(f"{username}@{cIP} : {clientData}\n")
     clientSysData.flush()
     print(f"[+] {username} joined the server")
@@ -64,7 +106,12 @@ def handleClient(cSoc: socket.socket, cIP):
     while True:
         try:
             msg = cSoc.recv(RX_BUFFER).decode(FORMAT)
-            broadcast(msg, username)
+            decMsg = decryptMsg(keyChars, msg)
+            broadcast(decMsg, username)
+        except ConnectionResetError:
+            print("[-] Client disconnected!\n")
+            clients.remove(cSoc)
+            cSoc.close()
         except:
             with clientLock:
                 clients.remove(cSoc)
@@ -80,14 +127,16 @@ def main():
         try:
             clientSoc, clinetIP = serverSoc.accept()
             if len(clients) >= maxClients:
+                print(
+                    f"\n[*] {clinetIP} trying to connect (MAX CLIENT ERROR)\n")
                 clientSoc.send(
-                    "Server is full, try again later.".encode(FORMAT))
+                    "FULL".encode(FORMAT))
                 clientSoc.close()
                 continue
             print(f"\n[+] Got connection from {clinetIP[0]}!")
             with clientLock:
                 clients.append(clientSoc)
-            clientThread = threading.Thread(
+            clientThread = Thread(
                 target=handleClient, args=(clientSoc, clinetIP))
             clientThread.start()
         except socket.timeout:
