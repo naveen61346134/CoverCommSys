@@ -11,12 +11,12 @@ clients = []
 clientSysData = open("clientSystem.log", "a")
 maxClients = 2
 FORMAT = "UTF-8"
-RX_BUFFER = 1024
+RX_BUFFER = 4096
 clientLock = Lock()
 shutdownServer = Event()
 logging.basicConfig(filename='server.log', level=logging.INFO)
 conf.get_default().log_event_callback = lambda log: logging.info(log)
-ngrok.set_auth_token("YOUR-TOKEN")
+ngrok.set_auth_token("2mtaFzCesO4Y1dEVRNfc2gJwXHx_4sGVXErgUUV8Q7zG5DUAk")
 
 print("[*] Starting tcp server up....")
 hostIP = socket.gethostbyname(socket.gethostname())
@@ -24,7 +24,7 @@ port = 8080
 serverAddr = (hostIP, port)
 serverSoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 serverSoc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-serverSoc.settimeout(1)
+serverSoc.settimeout(3)
 try:
     serverSoc.bind(serverAddr)
 except OSError:
@@ -42,9 +42,7 @@ shuffle(keyChars)
 def sendKey(soc: socket.socket):
     kstr = "".join(keyChars)
     baseKey = b64encode(kstr.encode(FORMAT)).decode(FORMAT)
-    print("\t[=]SENDING KEY")
     soc.send(baseKey.encode(FORMAT))
-    print("\t[=]Waiting for log")
     info = soc.recv(RX_BUFFER).decode(FORMAT)
     print(decryptMsg(keyChars, info))
     return decryptMsg(keyChars, info)
@@ -108,6 +106,17 @@ def handleClient(cSoc: socket.socket, cIP):
             msg = cSoc.recv(RX_BUFFER).decode(FORMAT)
             decMsg = decryptMsg(keyChars, msg)
             broadcast(decMsg, username)
+        except OSError as e:
+            if e.errno == 10038:
+                print("[-] Invalid socket operation.")
+                exit(1)
+            elif e.errno == 10054:
+                print("[-] Client disconnected!")
+                clients.remove(cSoc)
+                cSoc.close()
+            else:
+                print(f"Unexpected error: {e}")
+                exit(1)
         except ConnectionResetError:
             print("[-] Client disconnected!\n")
             clients.remove(cSoc)
