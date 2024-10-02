@@ -6,9 +6,10 @@ from base64 import b64decode
 from threading import Thread, Event
 from string import ascii_lowercase, ascii_uppercase, digits, punctuation
 
+
 FORMAT = "UTF-8"
-RX_BUFFER = 1024
-sys.setswitchinterval(0.003)
+RX_BUFFER = 4096
+sys.setswitchinterval(0.005)
 cCount = os.cpu_count()
 uname = os.getlogin()
 cs = list(platform.uname())
@@ -58,6 +59,9 @@ def sendMsg():
         except (KeyboardInterrupt, EOFError):
             print("[-] closing connection")
             shutdown.set()
+        except ConnectionResetError:
+            print("[-] Server has been shutdown!")
+            shutdown.set()
 
 
 def recieveMsg():
@@ -70,6 +74,9 @@ def recieveMsg():
                 shutdown.set()
             else:
                 print(msg)
+        except ConnectionResetError:
+            print("[-] Server has been shutdown!")
+            shutdown.set()
         except KeyboardInterrupt:
             print("[-] closing connection")
             shutdown.set()
