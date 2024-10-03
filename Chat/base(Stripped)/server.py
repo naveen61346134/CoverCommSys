@@ -5,7 +5,7 @@ import socket
 import threading
 
 clients = []
-maxClients = 2
+maxClients = 7
 FORMAT = "UTF-8"
 RX_BUFFER = 1024
 clientLock = threading.Lock()
@@ -78,14 +78,17 @@ def handleClient(cSoc: socket.socket):
             msg = cSoc.recv(RX_BUFFER).decode(FORMAT)
             decMsg = decryptMsg(keyChars, msg)
             broadcast(decMsg, username)
+        except ConnectionAbortedError:
+            print("[-] Client disconnected!\n")
+            if isinstance(cSoc, socket.socket):
+                cSoc.close()
+            break
         except ConnectionResetError:
             print("[-] Client disconnected!\n")
-            clients.remove(cSoc)
-            cSoc.close()
-        except:
             with clientLock:
-                clients.remove(cSoc)
-                cSoc.close()
+                if isinstance(cSoc, socket.socket):
+                    clients.remove(cSoc)
+                    cSoc.close()
             print(f"[*] {username} left the server")
             broadcast(f"{username} left the chat")
             break
