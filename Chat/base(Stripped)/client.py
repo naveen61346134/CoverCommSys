@@ -45,10 +45,10 @@ def decryptMsg(key: list, msg: str):
 def sendMsg():
     while not shutdown.is_set():
         try:
-            msg = input()
+            msg = input(">>> ")
             encMsg = encryptMsg(keyChars, msg)
             clientSoc.send(encMsg.encode(FORMAT))
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, EOFError):
             print("[-] closing connection")
             shutdown.set()
 
@@ -57,6 +57,13 @@ def recieveMsg():
     while not shutdown.is_set():
         try:
             msg = clientSoc.recv(RX_BUFFER).decode(FORMAT)
+        except KeyboardInterrupt:
+            print("[-] closing connection")
+            shutdown.set()
+        except ConnectionResetError:
+            print("[-] Server has been shutdown!")
+            shutdown.set()
+        finally:
             if msg == "FULL":
                 print("[-] Server is full.")
                 shutdown.set()
@@ -67,15 +74,6 @@ def recieveMsg():
                 shutdown.set()
             else:
                 print(decMsg)
-        except KeyboardInterrupt:
-            print("[-] closing connection")
-            shutdown.set()
-        except ConnectionResetError:
-            print("[-] Server has been shutdown!")
-            shutdown.set()
-        except Exception as e:
-            print(f"[-] Error occured: {e}")
-            shutdown.set()
 
 
 def main():
