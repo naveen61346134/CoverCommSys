@@ -1,34 +1,32 @@
+import sys
 import base64
 import string
 import random
 import socket
+import hashlib
 import threading
 
-clients = []
-maxClients = 7
 FORMAT = "UTF-8"
 RX_BUFFER = 1024
-clientLock = threading.Lock()
-shutdownServer = threading.Event()
-print("[*] Starting tcp server up....")
-hostIP = socket.gethostbyname(socket.gethostname())
-port = 8080
-serverAddr = (hostIP, port)
-serverSoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-serverSoc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-serverSoc.settimeout(1)
-try:
-    serverSoc.bind(serverAddr)
-except OSError:
-    print("Please close existing socket!")
-    exit(1)
-print(f"[+] Local Server up and running!")
-serverSoc.listen(maxClients)
 
+authHash = base64.b64decode(
+    "YTkxN2I3ZjQyMmZkMWE1MWU5NWRkZjY2MGJjM2JiMDU0ZjhjZDBjMWQ5OTNkMzQ1YTAxMjAxMmY4MWUxNjdhNw==".encode(FORMAT)).decode(FORMAT)
+with open(__file__, "rb") as script_file:
+    content = script_file.readlines()[-1:-47:-1][::-1]
+    data = ""
+    for row in content:
+        data += row.decode()
+    checkHash = hashlib.sha256(data.encode(FORMAT)).hexdigest()
+clientKeyOffset = b"Sl1yYWFq"
 chars = list(string.ascii_lowercase + string.ascii_uppercase +
              string.digits + string.punctuation + " " + "\n")
 keyChars = chars.copy()
 random.shuffle(keyChars)
+print("".join(keyChars))
+psk = input("Enter Server launch Code: ")
+offsetKey = base64.b64decode(clientKeyOffset).decode(FORMAT)
+refKey_ = "".join(chr(ord(off)+int(psk[0])) for off in offsetKey)
+refKey = base64.b64encode(refKey_.encode(FORMAT)).decode(FORMAT)
 
 
 def sendKey(soc: socket.socket):
@@ -119,6 +117,38 @@ def main():
 
 
 if __name__ == "__main__":
+    if authHash == checkHash:
+        if list(psk[1:4]) == keyChars[0:3] and list(psk[-1:-4:-1]) == keyChars[-1:-4:-1]:
+            if base64.b64encode(psk[4:10].encode(FORMAT)).decode(FORMAT) == refKey:
+                random.shuffle(keyChars)
+            else:
+                print("Invalid launch code!")
+                sys.exit(1)
+        else:
+            print("Invalid launch code!")
+            sys.exit(1)
+    else:
+        print("Code has been tampered!")
+        sys.exit(1)
+    clients = []
+    maxClients = 2
+    clientLock = threading.Lock()
+    shutdownServer = threading.Event()
+    print("\n[*] Starting tcp server up....")
+    hostIP = socket.gethostbyname(socket.gethostname())
+    port = 8080
+    serverAddr = (hostIP, port)
+    serverSoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    serverSoc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    serverSoc.settimeout(1)
+    try:
+        serverSoc.bind(serverAddr)
+    except OSError:
+        print("Please close existing socket!")
+        sys.exit(1)
+    print(f"[+] Local Server up and running!")
+    serverSoc.listen(maxClients)
+
     print(f"\n[+] Local Server listening on {hostIP}@{port}")
     try:
         main()
